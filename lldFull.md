@@ -99,11 +99,11 @@ class Bracket {
 - A box is a class. A line with a diamond is 'has a'. A triangle arrow is inheritance.
 - Multiplicity matters: one port call has many facts. Write 1 and *.
 - Do not draw every getter. Draw the nouns in the problem.
-- In a viva I draw PortCall, StatementOfFact, and LaytimeResult, and the arrow from the worker to the pure function.
+- A useful drawing is PortCall, StatementOfFact, and LaytimeResult, plus the arrow from the worker to the pure function.
 - The diagram is a map of who owns what. It is not the code.
 - careful: Arrows that mean nothing, or inheritance where you meant 'uses'.
 - What do you draw first?
-- The nouns the user said, and the one-to-many. I add methods only when the interviewer asks who calculates. A diagram of twenty classes in five minutes is unread.
+- Start with the nouns and the one-to-many. Add a method when you need to show who calculates. A diagram of twenty classes is hard to read.
 
 ```
 PortCall 1 ---- * StatementOfFact
@@ -266,7 +266,7 @@ class StripeAdapter implements PaymentGateway {
 - A decorator is a jacket on the same person. The bouncer still sees a person. The jacket adds pockets.
 - careful: Editing the original class for every cross-cutting concern.
 - What does @Injectable do?
-- It is a TypeScript decorator that marks the class so Nest can inject it. It is metadata. It is not the GoF decorator pattern, and I can explain both if they ask.
+- It is a TypeScript decorator that marks the class so Nest can inject it. It is metadata. It is not the GoF decorator pattern.
 
 ```typescript
 class LoggingRepo implements PortCalls {
@@ -476,11 +476,11 @@ await db.$executeRaw`
 
 ## Machine coding
 
-- Machine coding is building a small working design in the interview, not reciting pattern names.
+- Machine coding means building a small working design, not reciting pattern names.
 - Clarify the rules for five minutes. Ask what done means.
 - Name the types. Write the state transitions. Then the one function that is easy to get wrong.
 - Keep a main path working before you add features.
-- Talk while you type. A silent perfect solution is worse than a narrated simple one.
+- Get the main path working before you add extra cases.
 - A fair exercise from your life: a single-elimination bracket, or a laytime function with one exception such as a paused hour.
 - It is a small shop you open before the paint is dry. The door works. The decoration waits.
 - careful: Spending forty minutes on folders and interfaces and having nothing that runs.
