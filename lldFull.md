@@ -1,513 +1,424 @@
 # LLD
 
-## OOP pillars
+## chapter 1 OOP pillars
 
-- The four pillars are encapsulation, abstraction, inheritance, and polymorphism.
-- Encapsulation hides the fields. Callers use methods. The password hash has no setter that takes a raw string from a controller.
-- Abstraction is the small surface. A PaymentGateway has charge(). Stripe's HTTP is behind it.
-- Inheritance is an is-a relationship. Use it rarely.
-- Polymorphism means the caller uses the surface, and the object behaves according to its real type.
-- Encapsulation is a counter with a window. You ask for a ticket. You do not walk in and edit the ledger.
-- careful: A base class of ten subclasses because a tutorial did it that way.
-- Which pillar do you use most?
-- Encapsulation and a small interface. Inheritance is the one I reach for last. A tournament and a friendly match can share a function. They do not need a deep class tree.
+- a class = a named shape. fields and methods
+- an object = one value of that shape
+- encapsulation = the fields that must stay valid are private. callers use a method
+- inheritance = a subclass is a kind of the parent. we use it when the "is a" sentence is true
+- polymorphism = the caller uses the parent type. the actual method depends on the object
+- abstraction = the caller sees the operation, not every step inside
+- in TypeScript we often use a type and functions, not a deep class tree. the four ideas still name the design
 
-```typescript
-interface PaymentGateway { charge(amount: number): Promise<string> }
-class StripeGateway implements PaymentGateway { /* HTTP here */ }
-```
-
-- homework
-```typescript
-interface PaymentGateway { charge(amount: number): Promise<string> }
-class StripeGateway implements PaymentGateway { /* HTTP here */ }
-```
-
-## SOLID
-
-- SOLID is five tests for a class that has started to rot.
-- S: one reason to change. The laytime function does not also send email.
-- O: add a new payment provider by adding a class, not by editing a switch in five files.
-- L: a subtype must be usable anywhere the parent was promised. A 'preview gateway' that throws on charge breaks callers.
-- I: small interfaces. Do not make a read model implement a write method.
-- D: depend on the interface. The service asks for PaymentGateway, not for StripeGateway.
-- Each letter is a way of asking 'if this changes, what else breaks?'.
-- careful: Reciting the five words with no example from your code.
-- Give one SOLID break you have seen.
-- A controller that calculates money, writes SQL, and sends mail. Three reasons to change. I would leave the controller as HTTP, the service as the rule, and the mail on a queue.
-
-```typescript
-constructor(private readonly payments: PaymentGateway) {}
-```
-
-- homework
-```typescript
-constructor(private readonly payments: PaymentGateway) {}
-```
-
-## DRY, KISS, YAGNI
-
-- DRY is don't repeat knowledge. KISS is keep it simple. YAGNI is you aren't gonna need it.
-- Two copies of the Elo formula will disagree after one fix. That is the DRY that matters. Two similar lines of UI are not a crisis.
-- KISS: a sorted array is enough until a heap has a measured job.
-- YAGNI: do not build sharding, plugins, and a rules engine for a tournament that has one format.
-- The tested shared package for laytime is DRY across the API and the worker.
-- DRY is one recipe, not one spoon. KISS is the smallest recipe that feeds the guest. YAGNI is not buying a second oven.
-- careful: A shared helper that takes twelve flags to serve two callers.
-- When would you copy code on purpose?
-- When the two copies will change for different reasons. A PDF layout and an email layout can look similar today and diverge. Forcing them into one template makes both worse.
-
-```typescript
-one laytime() used by the API and the worker
-no second copy in the React page
-```
-
-- homework
-```typescript
-one laytime() used by the API and the worker
-no second copy in the React page
-```
-
-## Composition over inheritance
-
-- Composition means an object holds another object and delegates. Inheritance means it is a subclass.
-- A bracket 'has a' scheduler. It is not a subclass of scheduler.
-- Inheritance couples the child to the parent's private habits.
-- Compose when the behaviour is a part. Inherit when you truly have an is-a and a stable parent, which is rare.
-- React does this with components inside components, not with class hierarchies.
-- Inheritance is welding. Composition is bolting on a part you can unbolt.
-- careful: A five-level class tree for user, admin, operator, viewer.
-- Why not a BaseService?
-- It becomes a drawer of unrelated helpers, and every service inherits mail, cache, and logging it does not use. I inject the logger and the mailer.
-
-```typescript
-class Bracket {
-  constructor(private readonly rating: Elo) {}
+```ts
+class Money {
+  private constructor(private readonly cents: number) {}
+  static fromDollars(dollars: number) {
+    return new Money(Math.round(dollars * 100));
+  }
+  add(other: Money) {
+    return new Money(this.cents + other.cents);
+  }
+  toDollars() {
+    return this.cents / 100;
+  }
 }
 ```
 
-- homework
-```typescript
-class Bracket {
-  constructor(private readonly rating: Elo) {}
+- cents stay private so nobody stores 7,500.4 dollars by accident
+- `fromDollars` is the door. the constructor is private
+- a PortCall and a Match are different types. inheritance between them would be a lie
+
+- homework of chapter 1
+```ts
+// 1a  which pillar keeps cents private
+// 1b  a function that takes a Money and does not care if it was built from dollars
+// 1c  why Match should not extend PortCall
+```
+
+## chapter 2 SOLID
+
+- S = one reason to change. the laytime function does not also send email
+- O = open for extension, closed for modification. a new fact type should not require editing a giant switch if we can add a handler
+- L = a subtype can stand in for the parent. if it cannot, it is not a subtype
+- I = small interfaces. a reader does not have to implement save
+- D = depend on an abstraction. the service asks for a repository, and the test passes a fake
+
+```ts
+interface PortCallStore {
+  find(id: string): Promise<{ allowedHours: number; usedHours: number } | null>;
+}
+
+class LaytimeService {
+  constructor(private readonly store: PortCallStore) {}
+  async quote(id: string, perDay: number) {
+    const row = await this.store.find(id);
+    if (!row) return null;
+    return laytime({ ...row, demurragePerDay: perDay });
+  }
 }
 ```
 
-## UML class diagrams
+- the service does not mention Prisma. the production store does
+- a switch of 30 cases that we edit every week is the O being missed
+- a "subtype" that throws on half the methods breaks L
 
-- A class diagram names the types, their fields, and who holds whom.
-- A box is a class. A line with a diamond is 'has a'. A triangle arrow is inheritance.
-- Multiplicity matters: one port call has many facts. Write 1 and *.
-- Do not draw every getter. Draw the nouns in the problem.
-- A useful drawing is PortCall, StatementOfFact, and LaytimeResult, plus the arrow from the worker to the pure function.
-- The diagram is a map of who owns what. It is not the code.
-- careful: Arrows that mean nothing, or inheritance where you meant 'uses'.
-- What do you draw first?
-- Start with the nouns and the one-to-many. Add a method when you need to show who calculates. A diagram of twenty classes is hard to read.
-
+- homework of chapter 2
+```ts
+// 2a  which letter is the fake store in a test
+// 2b  which letter is "laytime does not send the socket event"
+// 2c  split a UserStore that has save, sendEmail, and hashPassword into smaller interfaces
 ```
-PortCall 1 ---- * StatementOfFact
-PortCall ---- LaytimeResult
+
+## chapter 3 DRY, KISS, YAGNI, and composition
+
+- DRY = do not repeat the rule. one laytime function, not a copy in the worker and a copy in the controller
+- repeating a string constant is fine. repeating a money rule is not
+- KISS = the simplest design that holds the rule
+- YAGNI = do not build the shard router, the plugin system, or the second database until a real case exists
+- composition = an object has another object. "has a"
+- inheritance = "is a"
+- prefer composition when the relationship is "uses" or "has"
+- a worker has a calculator. the worker is not a kind of calculator
+
+```ts
+class Worker {
+  constructor(private readonly quote: (id: string) => Promise<number>) {}
+  async run(id: string) {
+    return this.quote(id);
+  }
+}
+```
+
+- the quote function can be the real laytime path or a fake in a test
+- a five-level class tree for admin, operator, and viewer is inheritance doing a role's job. roles are data
+
+- homework of chapter 3
+```ts
+// 3a  DRY or not: two copies of the 72/84/15000 example's formula
+// 3b  has-a or is-a: a tournament has many matches
+// 3c  a feature nobody has asked for. which saying tells us to wait
+```
+
+## chapter 4 UML class diagrams
+
+- a box = a class or a type. the name, then the fields that matter
+- a line with a diamond = has a
+- a hollow triangle = inheritance
+- a dashed arrow = uses
+- multiplicity = how many. 1, 0..1, *
+- draw the nouns. skip the getters
+- one port call has many facts. one fact belongs to one port call
+
+```text
+PortCall  1 ---- *  StatementOfFact
+PortCall  1 ---- 0..1  LaytimeResult
 LaytimeCalculator ....> PortCall
 ```
 
-- homework
-```
-PortCall 1 ---- * StatementOfFact
-PortCall ---- LaytimeResult
-LaytimeCalculator ....> PortCall
-```
+- start with the nouns a person said, and the one-to-many
+- add a method when we need to show who calculates
+- a diagram of twenty boxes is hard to read. split it
+- an arrow with no meaning is noise. inheritance where we meant "uses" is a wrong design, not a messy drawing
 
-## Singleton
-
-- A singleton is one instance in the process. Nest services are singletons by default.
-- The logger, the Prisma client, and the Redis connection are singletons. You do not open a new database pool per request.
-- A singleton that holds request data is a bug. The user of request 1 must not leak into request 2.
-- Tests can replace the singleton because Nest injects it. A hand-rolled getInstance() hidden in a module is harder to replace.
-- One per process is not one in the world. PM2 cluster means several Prisma clients, and that is correct.
-- One telephone for the office is a singleton. Writing the caller's name on the telephone itself is the bug.
-- careful: A mutable cache field on a singleton with no lock and no bound.
-- Is a singleton global state?
-- The connection is fine. A mutable user on that service is global state and will mix two requests. Keep request data on the request.
-
-```typescript
-@Injectable() // one instance for the process
-export class PrismaService {}
+- homework of chapter 4
+```text
+// 4a  Tournament and Match. the multiplicity
+// 4b  a dashed arrow from the worker to the calculator. what does dashed mean
+// 4c  draw User and Role with a junction, not with inheritance
 ```
 
-- homework
-```typescript
-@Injectable() // one instance for the process
-export class PrismaService {}
-```
+## chapter 5 Singleton
 
-## Factory
+- a singleton = one instance in the process
+- Nest services are singletons by default. one PortCallsService for the process
+- that is safe when the service keeps no request data in fields
+- a singleton that stores "the current user" in a field mixes two requests
+- the database pool is a singleton. the request is not
+- tests create their own instance and pass a fake. they do not reach for a global
 
-- A factory is a function or class whose job is to build the right object.
-- The caller asks for a notifier. The factory returns email or SMS based on a setting.
-- The caller does not import every concrete class.
-- A simple function is enough. A class named Factory is not more object-oriented.
-- Nest providers are factories.
-- A factory is the person at the counter who hands you the right form. You do not walk into every office.
-- careful: A factory that also sends the message and writes the database.
-- Factory or a switch in the service?
-- A switch of two cases in one place is fine. A switch copied in five services is a factory waiting to exist.
-
-```typescript
-function notifier(kind: "email" | "sms"): Notifier {
-  return kind === "sms" ? new SmsNotifier() : new EmailNotifier();
-}
-```
-
-- homework
-```typescript
-function notifier(kind: "email" | "sms"): Notifier {
-  return kind === "sms" ? new SmsNotifier() : new EmailNotifier();
-}
-```
-
-## Abstract factory
-
-- An abstract factory builds a family of objects that belong together.
-- A 'Stripe family' might build a charger and a refunder that share a key.
-- A 'fake family' builds a fake charger and a fake refunder for tests.
-- You need it when objects must match. A Stripe charger with a manual refunder is a bug.
-- If you have one object, a normal factory is enough. Do not jump here.
-- It is a set of matching furniture. You do not buy the table from one house and the chairs from another.
-- careful: Naming a simple constructor an abstract factory.
-- Have you used one?
-- The idea shows up as a test double that replaces a whole integration. I would not introduce the pattern until two related objects must be swapped together.
-
-```typescript
-interface Billing { charger(): Charger; refunder(): Refunder }
-```
-
-- homework
-```typescript
-interface Billing { charger(): Charger; refunder(): Refunder }
-```
-
-## Builder
-
-- A builder constructs an object over several steps when a constructor would have a dozen arguments.
-- A query or a test fixture is the usual place.
-- Each method returns this, and build() returns the finished object.
-- The unfinished object is not visible. Callers cannot forget a field if build checks.
-- For a DTO with three fields, a constructor is clearer.
-- A builder is assembling a form line by line and only handing it over when it is complete.
-- careful: A builder for an object with two fields.
-- Builder or options object?
-- An options object is the builder I use in TypeScript most days. A builder class earns its place when the steps have order and checks, such as a test fixture.
-
-```typescript
-const call = portCall().vessel("MV Star").arrived(at).build();
-```
-
-- homework
-```typescript
-const call = portCall().vessel("MV Star").arrived(at).build();
-```
-
-## Prototype
-
-- A prototype copies an existing object to make a new one.
-- JavaScript's prototype chain is how objects inherit behaviour. That is the language feature.
-- The pattern is clone. A bracket template cloned for a new tournament.
-- A shallow copy shares nested objects. A deep copy does not. Know which you did.
-- structuredClone or an explicit copy beats hoping spread syntax is deep.
-- A prototype is a filled-in form you photocopy. If you only copy the top page, the carbon underneath is still the original.
-- careful: Spread syntax described as a deep copy.
-- What does {...obj} copy?
-- The top level. Nested objects are still shared. Mutating next.rounds[0] mutates the template. I say shallow, and I use a deep clone when the nest must diverge.
-
-```typescript
-const next = structuredClone(template);
-next.id = newId();
-```
-
-- homework
-```typescript
-const next = structuredClone(template);
-next.id = newId();
-```
-
-## Adapter
-
-- An adapter wraps a thing so it fits the interface you already have.
-- Stripe's SDK is not your PaymentGateway. A small class adapts it.
-- The rest of the app never imports Stripe.
-- A second provider is a second adapter.
-- The adapter translates types and errors. It does not contain the fee rule.
-- An adapter is a travel plug. The device stays the same. The pins change.
-- careful: An adapter that also calculates tax and sends email.
-- Adapter or rewriting the caller?
-- If one outside library has a different shape, wrap it. Do not sprinkle the SDK through the services.
-
-```typescript
-class StripeAdapter implements PaymentGateway {
-  async charge(amount: number) { /* stripe SDK */ return id; }
-}
-```
-
-- homework
-```typescript
-class StripeAdapter implements PaymentGateway {
-  async charge(amount: number) { /* stripe SDK */ return id; }
-}
-```
-
-## Decorator
-
-- A decorator wraps an object and adds behaviour, and it still looks like the same interface.
-- Logging around a repository. Timing around a client. Retry around a call.
-- Nest's @Get and @UseGuards are decorators in the TypeScript sense: functions that attach metadata.
-- The pattern and the keyword are related and not identical. Be able to say both.
-- Wrapping is how you add behaviour without editing the original class.
-- A decorator is a jacket on the same person. The bouncer still sees a person. The jacket adds pockets.
-- careful: Editing the original class for every cross-cutting concern.
-- What does @Injectable do?
-- It is a TypeScript decorator that marks the class so Nest can inject it. It is metadata. It is not the GoF decorator pattern.
-
-```typescript
-class LoggingRepo implements PortCalls {
-  constructor(private inner: PortCalls, private log: Logger) {}
-  find(id: string) {
-    this.log.info(id);
-    return this.inner.find(id);
+```ts
+@Injectable()
+export class Clock {
+  now() {
+    return new Date();
   }
 }
 ```
 
-- homework
-```typescript
-class LoggingRepo implements PortCalls {
-  constructor(private inner: PortCalls, private log: Logger) {}
-  find(id: string) {
-    this.log.info(id);
-    return this.inner.find(id);
+- Clock can be a singleton. it has no fields
+- a class with `private static instance` is the textbook singleton. in Nest, the module system is that one instance
+- if we put a cache Map on the service, say so, and bound its size. it is process memory, not a shared cache across processes
+
+- homework of chapter 5
+```ts
+// 5a  why a singleton UserContext field breaks under two requests
+// 5b  a service that is safe as a singleton
+// 5c  where a test gets its own service
+```
+
+## chapter 6 Factory and abstract factory
+
+- a factory = a function or class whose job is to build an object
+- the caller does not see the constructor details
+- we use one when building has a choice. a test clock or a real clock. a local file store or an object store
+- an abstract factory = a family of builders that belong together
+- example: a "test kit" that builds a fake mailer and a fake storage, and a "production kit" that builds the real ones
+- if there is only one product, a single function is enough. the abstract factory is for a set that must match
+
+```ts
+function createStorage(env: "test" | "prod"): Storage {
+  if (env === "test") return new MemoryStorage();
+  return new ObjectStorage(process.env.BUCKET!);
+}
+
+interface AppKit {
+  storage(): Storage;
+  mailer(): Mailer;
+}
+```
+
+- the controller asks the factory or receives the Storage in the constructor. it does not branch on env itself
+- a switch that grows every week is a sign the factory should return an interface, and each branch is a class
+
+- homework of chapter 6
+```ts
+// 6a  a factory for a Mailer that logs in tests and sends in production
+// 6b  when an abstract factory is more than we need
+// 6c  who should not contain the env if-statement
+```
+
+## chapter 7 Builder and prototype
+
+- a builder = step by step construction when the object has many optional parts
+- a constructor with eight optional arguments is hard to read. a builder names each step
+- the build method checks that the required parts exist
+- a prototype = an object we copy to make another
+- in JavaScript, Object.create and the spread operator are the everyday copy
+- copy deep when the nested object must not be shared. a shallow copy shares the inner arrays
+- we use a prototype when the starting shape is expensive or fiddly, and each copy then changes a little
+
+```ts
+class PortCallBuilder {
+  private vessel = "";
+  private allowedHours = 0;
+  vesselName(name: string) {
+    this.vessel = name;
+    return this;
+  }
+  hours(n: number) {
+    this.allowedHours = n;
+    return this;
+  }
+  build() {
+    if (!this.vessel || this.allowedHours <= 0) throw new Error("incomplete");
+    return { vesselName: this.vessel, allowedHours: this.allowedHours };
   }
 }
 ```
 
-## Facade
-
-- A facade is a simple front over several calls.
-- Starting a tournament might create the row, seed the bracket, and enqueue a mail. One method does those steps.
-- The caller does not learn the order.
-- The facade does not hide so much that you cannot test the pieces.
-- A Nest service method is often a small facade.
-- A facade is the one button that turns on the lights, the screen, and the sound. The equipment is still separate.
-- careful: A class named Facade that contains the business rules.
-- Facade or god class?
-- A facade is thin. It orders the steps. If the fee math moves into it, it has stopped being a facade.
-
-```typescript
-start(input) {
-  const t = await this.db.create(input);
-  await this.bracket.seed(t.id);
-  await this.mail.enqueue(t.id);
-  return t;
-}
+```ts
+const base = { limits: { loginPerMinute: 10 } };
+const copy = { ...base, limits: { ...base.limits } };
 ```
 
-- homework
-```typescript
-start(input) {
-  const t = await this.db.create(input);
-  await this.bracket.seed(t.id);
-  await this.mail.enqueue(t.id);
-  return t;
-}
+- without the inner spread, `copy.limits.loginPerMinute = 1` would also change base
+- a builder that can build an invalid object missed its job. the check is in build()
+
+- homework of chapter 7
+```ts
+// 7a  build a match with home, away, and an optional court, using a builder
+// 7b  show a shallow copy bug with a nested array
+// 7c  the deep copy of that array
 ```
 
-## Proxy
+## chapter 8 Adapter, decorator, facade, and proxy
 
-- A proxy stands in front of an object and controls access.
-- A lazy proxy opens the database connection on the first query.
-- A protection proxy checks the role before the real method.
-- Nest guards are a form of this at the route, which is usually the better place.
-- A proxy that does real work becomes a surprise.
-- A proxy is a receptionist who may refuse you before you see the person you asked for.
-- careful: Authorisation only in the React page, which is neither a proxy nor a guard on the server.
-- Proxy or guard?
-- For HTTP, a guard. For a client you do not control, a proxy. I do not hide authorisation only inside a proxy that one caller can forget to use.
+- adapter = a wrapper so a thing we do not control matches the interface we want
+- a Stripe object becomes a PaymentGateway with charge() and refund()
+- decorator = add behavior around an object, same interface
+- a logging decorator calls the real store, then logs the id. the caller still sees PortCallStore
+- this is not the same word as a TypeScript decorator. a TypeScript decorator is metadata, such as @Injectable. the pattern is a wrapper object
+- facade = a simple front for several steps
+- "publish a video" hides the object-store write, the database row, and the encode job
+- proxy = a stand-in that controls access. a cache proxy, or a check that the caller may read
+- the proxy has the same interface as the real object
 
-```typescript
-class Guarded implements PortCalls {
-  find(id: string, user: User) {
-    if (!user.roles.includes("operator")) throw new Forbidden();
-    return this.inner.find(id);
+```ts
+class LoggingStore implements PortCallStore {
+  constructor(private readonly inner: PortCallStore) {}
+  async find(id: string) {
+    const row = await this.inner.find(id);
+    console.log("find", id, Boolean(row));
+    return row;
   }
 }
 ```
 
-- homework
-```typescript
-class Guarded implements PortCalls {
-  find(id: string, user: User) {
-    if (!user.roles.includes("operator")) throw new Forbidden();
-    return this.inner.find(id);
+```ts
+class PublishVideo {
+  constructor(private readonly files: Storage, private readonly db: Db, private readonly jobs: Queue) {}
+  async run(ownerId: string, bytes: Buffer) {
+    const key = await this.files.put(bytes);
+    const video = await this.db.video.create({ data: { ownerId, key } });
+    await this.jobs.add("encode", { videoId: video.id });
+    return video;
   }
 }
 ```
 
-## Observer
+- the adapter is at the edge, where a vendor type would otherwise leak into the service
+- the facade is allowed to do several steps. it is not allowed to hide a money rule that nothing can test
 
-- An observer subscribes to a subject. When the subject changes, the observers hear it.
-- EventEmitter in Nest is this.
-- The subject does not import every listener.
-- Listeners must be idempotent if the event can fire twice.
-- Socket.IO clients are observers of a room.
-- An observer is a mailing list. The writer does not visit each house.
-- careful: A listener that throws and stops the others, with no isolation.
-- Observer or a direct call?
-- A direct call when there is one known next step and the user is waiting. An event when several optional listeners exist, such as a socket push and a metric.
-
-```typescript
-emitter.emit("laytime.calculated", result);
-emitter.on("laytime.calculated", (result) => gateway.push(result));
+- homework of chapter 8
+```ts
+// 8a  adapter or decorator: log every find
+// 8b  adapter or decorator: wrap a vendor client
+// 8c  a facade method name for "sign up and send the first code"
+// 8d  a proxy that returns null when the role is viewer and the row is hidden
 ```
 
-- homework
-```typescript
-emitter.emit("laytime.calculated", result);
-emitter.on("laytime.calculated", (result) => gateway.push(result));
+## chapter 9 Observer, strategy, command, and state
+
+- observer = when something happens, tell the subscribers. they subscribed earlier
+- Socket.IO rooms are this idea across a network. in one process it is a list of functions
+- the subject does not know what the observers do
+- strategy = a family of algorithms behind one interface. pick one and pass it in
+- despatch at half rate, or despatch at zero, or despatch at the full rate. the laytime function takes the rule instead of a growing if
+- command = an object that stands for an action. it can be queued, logged, and sometimes undone
+- a job payload is a command. `{ type: "recalculate", portCallId }`
+- state = the object changes behavior when its status changes
+- a match moves scheduled -> live -> done. a done match does not accept a new score the same way a live one does
+- the state can be an enum and a function, not a class per status, when the rules are small
+
+```ts
+type DespatchRule = (savedHours: number, perHour: number) => number;
+
+const half: DespatchRule = (hours, perHour) => hours * perHour * 0.5;
+const none: DespatchRule = () => 0;
 ```
 
-## Strategy
+```ts
+type MatchStatus = "scheduled" | "live" | "done";
 
-- A strategy is a swappable algorithm behind one interface.
-- Single elimination and double elimination are two strategies with the same 'build bracket' surface.
-- The caller picks one. It does not contain both as a switch of two hundred lines.
-- This is the open/closed principle in practice.
-- A function value is a strategy. A class is optional.
-- A strategy is a lens you can change. The camera stays. The lens does the optics.
-- careful: A strategy interface with one implementation and no second in sight.
-- Strategy or if statements?
-- If there are two short branches, if is clearer. If each branch is a page, or a third format is coming, I extract a strategy.
-
-```typescript
-const builders = { single: singleElim, double: doubleElim };
-return builders[format](players);
-```
-
-- homework
-```typescript
-const builders = { single: singleElim, double: doubleElim };
-return builders[format](players);
-```
-
-## Command
-
-- A command is an object that represents an action, so you can queue it, log it, or undo it.
-- The command has the data it needs: port call id, not a live request.
-- A queue job is a command.
-- Undo is another command, or a compensate method, if you truly need it.
-- Do not make a command hierarchy for every POST.
-- A command is a written order that can sit on a spike. The cook does not need the customer in the kitchen.
-- careful: Putting a database client inside the queued payload. It will not survive the trip.
-- Is every request a command?
-- In the CQRS sense, a write is a command and a read is a query. I do not need the framework. I do need the job object to contain ids, not sockets.
-
-```typescript
-type Recalculate = { type: "recalculate-laytime"; portCallId: string };
-await queue.add(cmd.type, cmd);
-```
-
-- homework
-```typescript
-type Recalculate = { type: "recalculate-laytime"; portCallId: string };
-await queue.add(cmd.type, cmd);
-```
-
-## State
-
-- The state pattern makes an object's behaviour depend on an explicit state, and the transitions are named.
-- A match is scheduled, live, or final. A final match does not accept a score edit the same way.
-- The illegal transition is a thrown error, not a silent no-op you will forget.
-- A column with a check constraint backs the state.
-- A pile of booleans, isLive and isFinal, will disagree. One enum will not.
-- State is a turnstile. It accepts a push in one position and not in another.
-- careful: Two booleans that can both be true.
-- Where is this on Bracket?
-- A match and a payment. A payment is pending, paid, or failed. The webhook may set paid only from pending. A second webhook sees paid and stops.
-
-```typescript
-type MatchState = "scheduled" | "live" | "final";
-function start(state: MatchState): MatchState {
-  if (state !== "scheduled") throw new Error("cannot start");
-  return "live";
+function canEditScore(status: MatchStatus): boolean {
+  return status === "live" || status === "scheduled";
 }
 ```
 
-- homework
-```typescript
-type MatchState = "scheduled" | "live" | "final";
-function start(state: MatchState): MatchState {
-  if (state !== "scheduled") throw new Error("cannot start");
-  return "live";
+- half-rate despatch is only the rule when the contract says so. the strategy makes that a choice, not a hidden 0.5
+- an observer that throws should not stop the others, or one slow screen handler takes down the save
+
+- homework of chapter 9
+```ts
+// 9a  strategy: two despatch rules, pick one in the caller
+// 9b  command: the fields of a recalculate job
+// 9c  canEditScore("done")
+// 9d  observer: who is told when a score is saved, in Bracket
+```
+
+## chapter 10 Thread safety
+
+- thread safety = shared data stays correct when work overlaps
+- Node's JavaScript does not run two lines at once on the main thread
+- it does overlap at every await. two requests can both read, both wait, both write
+- that is the bug from the database chapter. the fix is one SQL statement or a transaction
+- a field on a singleton is shared by every request. do not store "the current id" there
+- a local variable inside the function is safe. it belongs to that call
+- worker threads and a second process do not share the heap. they share the database
+- the database is the lock we already have. we do not add an in-process mutex and then run two processes
+
+```ts
+@Injectable()
+export class BadCounter {
+  n = 0;
+  async bump() {
+    const current = this.n;
+    await Promise.resolve();
+    this.n = current + 1;
+  }
 }
 ```
 
-## Thread safety
+- two overlapping bump calls can both read 0 and both write 1
+- the await is the gap, even though there is only one JavaScript thread
+- a counter that matters is a row: `UPDATE ... SET n = n + 1`
 
-- Thread safety means shared data stays correct when two workers touch it.
-- On one Node process, two requests interleave at await. That is a race even with one thread.
-- A shared mutable object on a singleton is the hazard.
-- Atomic database updates and Redis commands are the fix.
-- PM2 workers do not share JavaScript objects. They share the database. The race moves there.
-- One cashier with one pen is safe until they put the pen down mid-sum and serve someone else.
-- careful: Assuming await means 'this block is locked'.
-- Can two requests corrupt a number in one Node process?
-- Not by running two JavaScript lines at once. Yes by both reading a value, awaiting, and both writing. The await is the gap. I close the gap with one UPDATE that checks the old value.
-
-```sql
-await db.$executeRaw`
-  UPDATE berths SET ship_id = ${ship}
-  WHERE id = ${id} AND ship_id IS NULL`;
+- homework of chapter 10
+```ts
+// 10a  why the singleton field breaks and a local variable does not
+// 10b  the SQL that does not lose a bump
+// 10c  does a second Node process share this.n
 ```
 
-- homework
-```sql
-await db.$executeRaw`
-  UPDATE berths SET ship_id = ${ship}
-  WHERE id = ${id} AND ship_id IS NULL`;
-```
+## chapter 11 Machine coding
 
-## Machine coding
+- machine coding = build a small working design, not a list of pattern names
+- read the rules. name the types. write the one function that is easy to get wrong. then the edges
+- a fair exercise from this work: single-elimination, or laytime with one paused hour
+- keep a main path working before the extra cases
+- a bracket node points at the next match. the winner is written onto this match and into the parent slot
 
-- Machine coding means building a small working design, not reciting pattern names.
-- Clarify the rules for five minutes. Ask what done means.
-- Name the types. Write the state transitions. Then the one function that is easy to get wrong.
-- Keep a main path working before you add features.
-- Get the main path working before you add extra cases.
-- A fair exercise from your life: a single-elimination bracket, or a laytime function with one exception such as a paused hour.
-- It is a small shop you open before the paint is dry. The door works. The decoration waits.
-- careful: Spending forty minutes on folders and interfaces and having nothing that runs.
-- How do you start?
-- I repeat the rules, write the types, and do the happy path. Then I ask about the tie, the replay, and the empty bracket. I do not start with a class diagram of fifteen boxes.
+```ts
+type Match = {
+  id: string;
+  a?: string;
+  b?: string;
+  winner?: string;
+  next?: string;
+};
 
-```typescript
-type Match = { id: string; a?: string; b?: string; winner?: string; next?: string };
-function report(matches: Match[], id: string, winner: string) {
-  const match = matches.find((m) => m.id === id);
-  if (!match || match.winner) throw new Error("bad match");
-  match.winner = winner;
-  const parent = matches.find((m) => m.id === match.next);
+function winnerOf(matches: Map<string, Match>, id: string, player: "a" | "b") {
+  const match = matches.get(id);
+  if (!match || !match[player]) return;
+  match.winner = match[player];
+  if (!match.next) return;
+  const parent = matches.get(match.next);
   if (!parent) return;
-  if (!parent.a) parent.a = winner; else parent.b = winner;
+  if (!parent.a) parent.a = match.winner;
+  else parent.b = match.winner;
 }
 ```
 
-- homework
-```typescript
-type Match = { id: string; a?: string; b?: string; winner?: string; next?: string };
-function report(matches: Match[], id: string, winner: string) {
-  const match = matches.find((m) => m.id === id);
-  if (!match || match.winner) throw new Error("bad match");
-  match.winner = winner;
-  const parent = matches.find((m) => m.id === match.next);
-  if (!parent) return;
-  if (!parent.a) parent.a = winner; else parent.b = winner;
+- we did not build a class hierarchy. the type and the function are the design
+- the edge we write next is "both players missing" and "parent already full"
+- laytime's main path is the 72, 84, 15000 case. the paused hour is the next case, after the test for 7500 exists
+
+- homework of chapter 11
+```ts
+// 11a  two matches, m1 next is m2. winner of m1 is player a, "Ada". what is m2.a
+// 11b  the test for laytime 72, 84, 15000 before any pause rule
+// 11c  one edge you would write second, not first
+```
+
+## chapter 12 A small design, end to end
+
+- one screen saves a match winner. walk the objects
+- the controller is thin
+- the service loads the match, checks the status, writes the winner, fills the parent
+- the store is an interface
+- the status check is the state rule from chapter 9
+- the parent fill is the function from chapter 11
+
+```ts
+async function recordWinner(store: MatchStore, matchId: string, player: "a" | "b") {
+  const matches = await store.loadBracket(matchId);
+  const match = matches.get(matchId);
+  if (!match) throw new Error("missing");
+  if (match.winner) throw new Error("already played");
+  winnerOf(matches, matchId, player);
+  await store.save(matches);
 }
+```
+
+- "already played" is the state. we do not need a class named DoneMatch
+- save is one transaction in the real store, so the match and the parent commit together
+- this is the level of design we draw: nouns, one-to-many, the function that is easy to get wrong, the transaction
+
+- homework of chapter 12
+```ts
+// 12a  the boxes: controller, service, store, Match
+// 12b  why save is a transaction
+// 12c  where the "already played" rule lives
+// 12d  the UML line between Match and the next Match
 ```
